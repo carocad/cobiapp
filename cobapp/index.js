@@ -9,6 +9,8 @@
 **/
 
 const togpx = require('togpx')
+const xsd = require('libxml-xsd')
+const fs = require('fs')
 const express = require('express')
 const MongoClient = require('mongodb').MongoClient
 const url = 'mongodb://localhost:27017/test'
@@ -16,6 +18,13 @@ const app = express()
 let db = null
 let cobiColl = null
 
+// Synchronous: we don't want to start the server without validation
+const gpxValidatorV10 = xsd.parse(fs.readFileSync('gpx_v1_0.xsd', {encoding: 'utf-8'}))
+const gpxValidatorV11 = xsd.parse(fs.readFileSync('gpx.xsd', {encoding: 'utf-8'}))
+
+// fs.readFileSync('osm.gpx', {encoding: 'utf-8'})
+
+// connect to database and start to listen only on success
 MongoClient.connect(url, function (err, database) {
   if (err === null) {
     db = database
@@ -29,18 +38,22 @@ MongoClient.connect(url, function (err, database) {
   }
 })
 
-app.get('/lat/:lat/lon/:lon', function (req, res) {
-  console.log('lat: ' + typeof req.params.lat)
-  console.log('lon: ' + typeof req.params.lon)
-  // TODO: check that the latitude and longitude are between sensitive boundaries
+// accepted routes
+app.get('/gpx-near/lat/:lat/lon/:lon', function (req, res) {
+  const position = ParseLatLong(req.params.lat, req.params.lon)
+  if (position === null) {
+    const msg = 'malformed input: lat ' + req.params.lat +
+                ' lon ' + req.params.lon
+    console.log(msg)
+    return res.status(400).send(msg)
+  }
+
   const cursor = cobiColl.find(
         { 'features.geometry': {
           $nearSphere: {
             $geometry: {
               type: 'Point',
-              coordinates: [
-                parseFloat(req.params.lon),
-                parseFloat(req.params.lat)] // [ <longitude> , <latitude> ]
+              coordinates: position // [ <longitude> , <latitude> ]
             }
             // $maxDistance: 100000, nice to have but not requested
           }
@@ -65,6 +78,7 @@ app.get('/lat/:lat/lon/:lon', function (req, res) {
   })
 })
 
+// user submitted data
 app.post('/gpx-doc', function (req, res) {
   const gpxDoc = req.params.data // TODO !!!!!!!!!!!!
   // schemaConforms(gpxDoc)
@@ -75,6 +89,32 @@ app.post('/gpx-doc', function (req, res) {
   })
   res.send('Document inserted successfully')
 })
+
+// check if the input is a valid lat/lon pair, return null on error
+function ParseLatLong (lat, lon) {
+  if (isNaN(lat) || isNaN(lon)) {
+    return null
+  } else {
+    const numLat = parseFloat(lat)
+    const numLon = parseFloat(lon)
+    if (numLat > 90 || numLat < -90 || numLon > 180 || numLon < -180) {
+      return null
+    } else {
+      return [numLon, numLat]
+    }
+  }
+}
+
+// check if there is any errors, returns null when no errors occurs
+function gpxGrammarErrors (gpxString) {
+  const gpxV10Res = gpxValidatorV10.validate(gpxString)
+  const gpxV11Res = gpxValidatorV11.validate(gpxString)
+  if (gpxV11Res === null || gpxV10Res === null) {
+    return null
+  } else {
+    return {v10: gpxV10Res, v11: gpxV11Res}
+  }
+}
 
 // If the Node process ends, close the Mongo connection
 const ByeBye = function () {

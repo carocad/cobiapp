@@ -16,6 +16,7 @@
   "dependencies": {
     "express": "^4.14.0",
     "jsdom": "^9.4.1",
+    "libxml-xsd": "^0.5.2",
     "mongodb": "^2.2.5",
     "togeojson": "^0.13.0",
     "togpx": "^0.5.2"

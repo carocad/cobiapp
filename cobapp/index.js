@@ -8,24 +8,34 @@
 - too many results (limit it to an appropiate number)
 **/
 
+const fs = require('fs')
+const path = require('path')
+const jsdom = require('jsdom').jsdom
+const togeojson = require('togeojson')
 const togpx = require('togpx')
 const xsd = require('libxml-xsd')
-const fs = require('fs')
-const express = require('express')
 const MongoClient = require('mongodb').MongoClient
-const url = 'mongodb://localhost:27017/test'
+const dbUrl = 'mongodb://localhost:27017/test'
+const express = require('express')
+const bodyParser = require('body-parser')
 const app = express()
+
+// database & cobi collection
 let db = null
 let cobiColl = null
 
-// Synchronous: we don't want to start the server without validation
-const gpxValidatorV10 = xsd.parse(fs.readFileSync('gpx_v1_0.xsd', {encoding: 'utf-8'}))
-const gpxValidatorV11 = xsd.parse(fs.readFileSync('gpx.xsd', {encoding: 'utf-8'}))
+// get the xml body of a post request
+app.use(bodyParser.text({limit: '50mb'}))
 
-// fs.readFileSync('osm.gpx', {encoding: 'utf-8'})
+// Synchronous: we don't want to start the server without validation
+const gpxValidatorV10 = xsd.parse(fs.readFileSync(path.join(__dirname, 'gpx_v1_0.xsd'), {encoding: 'utf-8'}))
+const gpxValidatorV11 = xsd.parse(fs.readFileSync(path.join(__dirname, 'gpx.xsd'), {encoding: 'utf-8'}))
+
+// just for DEBUG
+// console.log(gpxGrammarErrors(fs.readFileSync(path.join(__dirname, 'osm.gpx'), {encoding: 'utf-8'})))
 
 // connect to database and start to listen only on success
-MongoClient.connect(url, function (err, database) {
+MongoClient.connect(dbUrl, function (err, database) {
   if (err === null) {
     db = database
     cobiColl = db.collection('foo')
@@ -67,22 +77,29 @@ app.get('/gpx-near/lat/:lat/lon/:lon', function (req, res) {
       const gpxData = results.map(function (geojson) {
         return togpx(geojson,
           {
-            featureTitle: function (prop) { return prop.name },
-            featureDescription: function (prop) { return prop.desc }
+            'featureTitle': function (prop) {
+              return ((prop.name) ? prop.name : prop)
+            },
+            'featureDescription': function (prop) {
+              return ((prop.desc) ? prop.desc : prop)
+            }
           })
       })
-      res.set('Content-Type', 'text/xml')
-      res.send('<?xml version="1.0" standalone="yes"?>' +
-               gpxData.join('\n'))
+      res.send(gpxData)
     }
   })
 })
 
 // user submitted data
 app.post('/gpx-doc', function (req, res) {
-  const gpxDoc = req.params.data // TODO !!!!!!!!!!!!
-  // schemaConforms(gpxDoc)
-  cobiColl.insertOne(gpxDoc, function (err, result) {
+  const gpxData = req.body
+  const errMsg = gpxGrammarErrors(gpxData)
+  if (errMsg !== null) {
+    console.log(errMsg)
+    return res.status(400).send(errMsg)
+  }
+  // insert document in database
+  cobiColl.insertOne(togeojson.gpx(jsdom(gpxData)), function (err, result) {
     if (err === null) {
       console.log('Inserted a document into the foo collection')
     }
@@ -112,7 +129,10 @@ function gpxGrammarErrors (gpxString) {
   if (gpxV11Res === null || gpxV10Res === null) {
     return null
   } else {
-    return {v10: gpxV10Res, v11: gpxV11Res}
+    return { msg: 'Input doesnt conforms to neither v1.1 nor v1.0 gpx schemas',
+      v10: gpxV10Res,
+      v11: gpxV11Res
+    }
   }
 }
 

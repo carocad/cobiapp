@@ -1,4 +1,6 @@
 # COBI challenge
+- use http://localhost:3000/gpx/near/lat/{lat}/lon/{lon} for searching gpx-files near the lat/lon Point
+- use http://localhost:3000/gpx to submit gpx-files for storage. HTTP body as raw text
 
 ## General Notes
 - "The location data of the GPX file should be stored in a database". I will assume that I can discard the metadata of the gpx files

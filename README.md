@@ -14,6 +14,10 @@
 - There is no specific restriction to either how close should the gpx documents be nor how many of them should we return. Given that this runs on a local machine with not a lot of data, I will leave those open but it should be taken into account if this is put into production.
 - There is no clear way to distinguish two gpx files without storing the full content. Nevertheless, that's generally not appropiate since xml files are not easily searchable. In the absense of a clear way to distinguish the content, it is possible for the database to contain duplicated information. I will leave this open assuming that something like a user-id + timestamp could be provided by COBI.
 
+## Test suite
+Postman link: https://www.getpostman.com/collections/3e0d9c1d2faf94cfba2b
+or check [cobi-gpx](https://github.com/carocad/cobiapp/blob/master/postman_collection.json)
+
 ## TASK
 - Create a Node.js HTTP server with Express
 - Create an endpoint that allows to upload a GPX file (no need for a frontend – you can use postman)
